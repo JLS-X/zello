@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estoque de Material de Limpeza - PWA</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="src/styles.css">
+<meta name="theme-color" content="#34495e">
+</head>
+<body>
+ 
+<header> <img src= "logo2.png" alt="Logo IBRR" height="130px"><br><strong>Estoque de Material de Limpeza IBRR</strong></header>
+<main>
+ <div class="card">
+ <h2>Equipe da Semana</h2>
+ <form id="formEquipe">
+ <label for="nomeEquipe">Nome da Equipe:</label>
+ <input type="text" id="nomeEquipe" placeholder="Nome da Equipe" required>
+ 
+ <label for="semana">Semana:</label>
+ <select id="semana">
+ <option value="1">1</option>
+ <option value="2">2</option>
+ <option value="3">3</option>
+ <option value="4">4</option>
+ <option value="5">5</option>
+ </select>
+ 
+ <button type="submit">Salvar</button>
+ </form>
+ <p><b>Equipe atual:</b> <span id="equipeAtual">Nenhuma definida</span> | <b>Semana:</b> <span id="semanaAtual">1</span></p>
+ </div>
+
+ <div class="card">
+ <h2>Adicionar Produto</h2>
+ <form id="formItem">
+ <input type="text" id="nome" placeholder="Nome do Produto" required>
+ <input type="number" id="emUso" placeholder="Qtd. em Uso" required min="0">
+ <input type="number" id="estoqueQtd" placeholder="Qtd. em Estoque" required min="0">
+ <button type="submit">Adicionar</button>
+ </form>
+ </div>
+
+ <div class="card">
+ <h2>Estoque Atual</h2>
+ <input type="text" id="searchInput" placeholder="Pesquisar produto..." style="width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #ccc;">
+ 
+ <button class="btn export-btn" id="exportar">Exportar para Excel</button>
+ <div class="table-container">
+ <table>
+ <thead>
+ <tr>
+ <th>Produto</th>
+ <th>Em Uso</th>
+ <th>Estoque</th>
+ <th>Data/Hora</th>
+ <th>Ações</th>
+ </tr>
+ </thead>
+ <tbody id="tabelaEstoque"></tbody>
+ </table>
+ </div>
+ </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+let estoque = JSON.parse(localStorage.getItem('estoque')) || [];
+let equipeSemana = localStorage.getItem('equipeSemana') || "";
+let semanaAtual = localStorage.getItem('semanaAtual') || "1";
+document.getElementById('equipeAtual').textContent = equipeSemana || "Nenhuma definida";
+document.getElementById('semanaAtual').textContent = semanaAtual;
+document.getElementById('semana').value = semanaAtual;
+
+function salvarEstoque(){ localStorage.setItem('estoque', JSON.stringify(estoque)); }
+function salvarEquipe(){ localStorage.setItem('equipeSemana', equipeSemana); }
+function salvarSemana(){ localStorage.setItem('semanaAtual', semanaAtual); }
+
+function atualizarTabela(termoBusca = ''){
+ const tabela = document.getElementById('tabelaEstoque');
+ tabela.innerHTML = '';
+ 
+ const estoqueFiltrado = estoque.filter(item => 
+ item.nome.toLowerCase().includes(termoBusca.toLowerCase())
+ );
+ 
+ estoqueFiltrado.forEach((item)=>{
+ const row = document.createElement('tr');
+ 
+ row.innerHTML = `
+ <td>${item.nome}</td>
+ <td class="${item.emUso > 2 ? 'low-uso' : ''}">
+ ${item.emUso}
+ <button class="btn add-btn" onclick="alterarQtd('${item.nome}','emUso',1)">+</button>
+ <button class="btn sub-btn" onclick="alterarQtd('${item.nome}','emUso',-1)">-</button>
+ </td>
+ <td class="${item.estoqueQtd <= 2 ? 'low-stock' : ''}">
+ ${item.estoqueQtd}
+ <button class="btn add-btn" onclick="alterarQtd('${item.nome}','estoqueQtd',1)">+</button>
+ <button class="btn sub-btn" onclick="alterarQtd('${item.nome}','estoqueQtd',-1)">-</button>
+ </td>
+ <td>${item.dataHora||""}</td>
+ <td><button class="btn delete-btn" onclick="removerItem('${item.nome}')">Excluir</button></td>
+ `;
+ tabela.appendChild(row);
+ });
+}
+
+function alterarQtd(nomeDoProduto, campo, delta){
+ const index = estoque.findIndex(item => item.nome === nomeDoProduto);
+ if(index === -1) return; // Não encontrou o produto
+ 
+ if(estoque[index][campo] + delta < 0){ alert("Não pode ser negativo!"); return; }
+ estoque[index][campo] += delta;
+ estoque[index].dataHora = new Date().toLocaleString();
+ salvarEstoque();
+ atualizarTabela(document.getElementById('searchInput').value);
+}
+
+function removerItem(nomeDoProduto){
+ const index = estoque.findIndex(item => item.nome === nomeDoProduto);
+ if(index === -1) return; // Não encontrou o produto
+ 
+ if(confirm("Remover "+estoque[index].nome+"?")){
+ estoque.splice(index,1);
+ salvarEstoque();
+ atualizarTabela(document.getElementById('searchInput').value);
+ }
+}
+
+// Adicionar produto
+document.getElementById('formItem').addEventListener('submit',e=>{
+ e.preventDefault();
+ const nome=document.getElementById('nome').value.trim();
+ const emUso=Number(document.getElementById('emUso').value);
+ const estoqueQtd=Number(document.getElementById('estoqueQtd').value);
+ if(nome){
+ estoque.push({nome, emUso, estoqueQtd, dataHora:new Date().toLocaleString()});
+ salvarEstoque(); atualizarTabela(); e.target.reset();
+ }
+});
+
+// Equipe e Semana
+document.getElementById('formEquipe').addEventListener('submit',e=>{
+ e.preventDefault();
+ equipeSemana = document.getElementById('nomeEquipe').value.trim();
+ semanaAtual = document.getElementById('semana').value;
+ salvarEquipe();
+ salvarSemana();
+ document.getElementById('equipeAtual').textContent = equipeSemana;
+ document.getElementById('semanaAtual').textContent = semanaAtual;
+ document.getElementById('nomeEquipe').value = '';
+});
+
+// Event listener para o campo de pesquisa
+document.getElementById('searchInput').addEventListener('keyup', (event) => {
+ const termoBusca = event.target.value;
+ atualizarTabela(termoBusca);
+});
+
+// Exportar Excel
+document.getElementById('exportar').addEventListener('click',()=>{
+ if(estoque.length===0){ alert("Nenhum item!"); return; }
+ if(!equipeSemana){ alert("Por favor, preencha o nome da equipe e a semana primeiro."); return; }
+
+ const dataConferencia = new Date().toLocaleDateString('pt-BR');
+ const semanas = [1,2,3,4,5];
+ const data=[];
+ data.push(["Controle de Material de Limpeza IBRR"]);
+ data.push(["DATA DA CONFERÊNCIA:", dataConferencia, "", "EQUIPE:", equipeSemana]);
+ const rowTop=["MATERIAL"];
+ semanas.forEach(()=>{rowTop.push("Semana","");});
+ const rowSub=[""];
+ semanas.forEach(()=>{rowSub.push("EM USO","ESTOQUE");});
+ data.push(rowTop); data.push(rowSub);
+
+ const semanaSelecionada = parseInt(document.getElementById('semana').value);
+ const startIndex = (semanaSelecionada - 1) * 2 + 1;
+
+ estoque.forEach(item=>{
+ const r=new Array(11).fill("");
+ r[0]=item.nome;
+ r[startIndex] = item.emUso;
+ r[startIndex + 1] = item.estoqueQtd;
+ data.push(r);
+ });
+
+ const ws=XLSX.utils.aoa_to_sheet(data);
+ ws['!merges']=[
+ {s:{r:0,c:0},e:{r:0,c:10}},
+ {s:{r:1,c:1},e:{r:1,c:2}},
+ {s:{r:1,c:4},e:{r:1,c:10}},
+ {s:{r:2,c:1},e:{r:2,c:2}},
+ {s:{r:2,c:3},e:{r:2,c:4}},
+ {s:{r:2,c:5},e:{r:2,c:6}},
+ {s:{r:2,c:7},e:{r:2,c:8}},
+ {s:{r:2,c:9},e:{r:2,c:10}}
+ ];
+ ws['B3']={v:"Semana 1"}; ws['D3']={v:"Semana 2"};
+ ws['F3']={v:"Semana 3"}; ws['H3']={v:"Semana 4"}; ws['J3']={v:"Semana 5"};
+ ws['!cols']=[{wch:28},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10},{wch:10}];
+
+ const wb=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb,ws,"Controle");
+ XLSX.writeFile(wb,"Controle_Material_Limpeza_IBRR.xlsx");
+});
+
+atualizarTabela();
+</script>
+</body>
+</html>
